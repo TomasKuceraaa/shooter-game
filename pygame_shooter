@@ -1,0 +1,341 @@
+from pygame import *
+from random import randint
+from time import time as timer
+
+
+
+
+#velikost okna
+win_heigth = 500
+win_width = 700
+#pocet nepratelu
+enemyCount = 3
+enemyCount2 = 1
+
+shipsLost = 0
+shipsDestroyed = 0
+#zbava naboju
+ammoLeft = 30
+#pocet asteroidu
+AsteroidCount = 2
+#zivoty 
+livesCount = 5
+win_count = 15
+#trida game sprite z te pozdeji budeme dedit
+class GameSprite(sprite.Sprite):
+    def __init__(self, sprite, position_x, position_y, size_x,size_y, speed):
+        super().__init__()
+        self.image = transform.scale(image.load(sprite),(size_x,size_y))
+        self.speed = speed
+        self.rect = self.image.get_rect()
+        self.rect.x = position_x 
+        self.rect.y = position_y
+        self.size_x = size_x
+        self.size_y = size_y
+
+    def displaySprite(self):
+        window.blit(self.image, (self.rect.x, self.rect.y))
+
+#trida hrace (nasi rakety) dedime z GameSprite
+class Player(GameSprite):
+
+    #ovladani rykety
+    def handleMovement(self):
+        keys = key.get_pressed()
+        if keys[K_a] and self.rect.x > 5:
+           self.rect.x -= self.speed
+        if keys[K_d] and self.rect.x < win_width - 80:
+           self.rect.x += self.speed
+
+    #strileni
+    def fire(self):
+        global ammoLeft
+
+        if ammoLeft > 0:
+
+            bullet = Bullet("bullet.png", self.rect.centerx, self.rect.top, 15, 20, 15)
+            bullets.add(bullet)
+            shootSound.play()
+            
+            ammoLeft-=1
+
+#trida prvniho nepratele tez dedime z clasy GameSprite
+class Enemy(GameSprite): 
+
+    def update(self):
+        self.rect.y += self.speed
+
+        if self.rect.y > win_heigth:
+            
+            self.rect.x = randint(80,win_width-80)
+            self.rect.y = 0
+            self.speed = randint(1,3)
+
+            global shipsLost
+            global isGameFinished
+            global playerWon
+            shipsLost+=1
+
+            if(shipsLost >= 5):
+                isGameFinished = True
+                playerWon = False
+
+    
+
+#classa druheho nepratele ktery je specialni svyma pohybama opet dedime z GameSprite
+class Enemy2(GameSprite):
+
+    def __init__(self, sprite, position_x, position_y, size_x, size_y, speed, direction):
+        super().__init__(sprite, position_x, position_y, size_x, size_y, speed)
+        self.direction = direction
+
+    def update(self):
+        self.rect.y += self.speed
+
+        if self.rect.x <= 0:
+            self.direction = "right"
+        if self.rect.x >= win_width - 85:
+            self.direction = "left"
+
+        if self.direction == "right":
+           self.rect.x += self.speed*2
+        else:
+           self.rect.x -= self.speed*2
+
+        if self.rect.y > win_heigth:
+            
+            self.rect.x = randint(80,win_width-80)
+            self.rect.y = 0
+            self.speed = randint(1,3)
+
+
+            
+            global shipsLost
+            global isGameFinished
+            global playerWon
+            #body
+            shipsLost+=2
+
+            if(shipsLost >= 5):
+                isGameFinished = True
+                playerWon = False
+
+    def updateImage(self):
+        window.blit(self.image, (self.rect.x, self.rect.y))
+
+#trida pro padajici asteroidy dedime zase ze tridy GameSprite
+class Asteroid(GameSprite):
+    
+    def update(self):
+        self.rect.y += self.speed
+
+        if self.rect.y > win_heigth:
+            
+            self.rect.x = randint(80,win_width-80)
+            self.rect.y = 0
+            self.speed = randint(1,3)
+
+            
+
+#trida pro naboje tez dedime ze tridy GameSprite
+class Bullet(GameSprite):
+
+    def update(self):
+        self.rect.y -= self.speed
+
+        if self.rect.y < 0-self.size_y:
+            self.kill() #Vymaze objekt ze vsech skupin
+
+            global shipsLost
+            shipsLost+=1
+
+#nastaveni okna
+window = display.set_mode((win_width,win_heigth))
+display.set_caption("Space Invaders")
+
+#nastaveni pozadi
+backgroundImage = transform.scale(
+    image.load("back.jpg"),
+    (700, 500)
+) 
+#hrac
+player = Player("rocket.png", (win_width-65)/2,win_heigth-65-20,65,65,5)
+
+#skupiny nepratelu atd...
+enemies = sprite.Group()
+enemies2 = sprite.Group()
+bullets = sprite.Group()
+asteroids_group = sprite.Group()
+
+#vytvareni vice nepratel najednou
+for i in range(enemyCount):
+    enemy = Enemy("ufo1.png", randint(80,win_width-80),-40,80,80,randint(1,3))
+    enemies.add(enemy)
+
+for i in range(enemyCount2):
+    enemy2 = Enemy2("specialUFO.png", randint(80,win_width-80),-40,80,80,1,"left")
+    enemies2.add(enemy2)
+
+for i in range(AsteroidCount):
+    asteroid = Asteroid("asteroid.png", randint(80,win_width-80),-40,80,80,randint(1,2))
+    asteroids_group.add(asteroid)
+    
+
+#hudba
+mixer.init()
+mixer.music.load('space.ogg')
+mixer.music.set_volume(0.2)
+mixer.music.play()
+
+shootSound = mixer.Sound('fire.ogg')
+
+
+font.init()
+#text
+text_ikon = font.SysFont('Arial',26)
+textHandler = font.SysFont('Arial',86)
+text_player_lost = textHandler.render("YOU LOST", 100, (255,0,0))
+text_player_won = textHandler.render("YOU WON", 100, (0,255,0)) 
+text_player_again = text_ikon.render("press space for next game", 40, (255,0,0))
+
+
+isGameRunning = True
+isGameFinished = False
+playerWon = None
+clock = time.Clock()
+FPS = 60
+#game loop
+while isGameRunning:
+
+    window.blit(backgroundImage,(0,0))
+    
+    for e in event.get():
+        if e.type == QUIT:
+            isGameRunning = False
+        #Event typu zmacknuti klavesy
+        elif e.type == KEYDOWN:
+            if e.key == K_SPACE and isGameFinished == False:
+                player.fire()
+            elif e.key == K_SPACE and isGameFinished == True:
+                isGameFinished = False
+                for enemy in enemies:
+                    enemy.kill()
+                for asteroid in asteroids_group:
+                    asteroid.kill()
+                for enemy2 in enemies2:
+                    enemy2.kill()
+                for bullet in bullets:
+                    bullet.kill()
+
+                enemyCount = 3
+                enemyCount2 = 1
+
+                shipsLost = 0
+                shipsDestroyed = 0
+                #zbava naboju
+                ammoLeft = 30
+                #pocet asteroidu
+                AsteroidCount = 2
+                #zivoty 
+                livesCount = 3
+
+                player.kill()
+
+                player = Player("rocket.png", (win_width-65)/2,win_heigth-65-20,65,65,5)
+                
+                for i in range(enemyCount):
+                    enemy = Enemy("ufo1.png", randint(80,win_width-80),-40,80,80,randint(1,3))
+                    enemies.add(enemy)
+
+                for i in range(enemyCount2):
+                    enemy2 = Enemy2("specialUFO.png", randint(80,win_width-80),-40,80,80,1,"left")
+                    enemies2.add(enemy2)
+
+                for i in range(AsteroidCount):
+                    asteroid = Asteroid("asteroid.png", randint(80,win_width-80),-40,80,80,randint(1,2))
+                    asteroids_group.add(asteroid)
+            
+                
+                    
+    
+    if not(isGameFinished):
+
+        player.displaySprite()
+        player.handleMovement()
+        
+        enemies.update()
+        enemies.draw(window)
+
+        enemies2.update()
+        enemies2.draw(window)
+
+        bullets.update()
+        bullets.draw(window)
+
+        asteroids_group.update()
+        asteroids_group.draw(window)
+        
+
+        #Kolize s nepřítelem
+        player_enemy_collision_list = sprite.spritecollide(player, enemies, True)
+        
+        if(len(player_enemy_collision_list) != 0 or sprite.collide_rect(player,enemy2)):
+            livesCount -= 1
+        
+        player_asteroid_collision_list = sprite.spritecollide(player, asteroids_group, True)
+        
+        if(len(player_asteroid_collision_list) != 0 ):
+            livesCount -= 1
+            
+
+        #Kolize kulek s nepřáteli
+        bullet_enemy_collision_list = sprite.groupcollide(bullets, enemies, True,True)
+        shipsDestroyed += len(bullet_enemy_collision_list)
+        
+        for i in range(len(bullet_enemy_collision_list)):
+            enemy = Enemy("ufo1.png", randint(80,win_width-80),-40,80,80,randint(1,3))
+            enemies.add(enemy)
+        
+        bullet_enemy2_collision_list = sprite.groupcollide(bullets, enemies2, True,True)
+        shipsDestroyed += len(bullet_enemy2_collision_list)
+
+        for i in range(len(bullet_enemy2_collision_list)):
+            enemy2 = Enemy2("specialUFO.png", randint(80,win_width-80),-40,80,80,1,"left")
+            enemies2.add(enemy2)
+        
+        #Spawn Enemy2
+
+        if(shipsDestroyed >= win_count):
+            isGameFinished = True
+            playerWon = True
+
+        if (livesCount <= 0):
+            isGameFinished =True
+            playerWon = False
+
+        #Handling score
+        text_ships_destroyed = text_ikon.render("Ships Destroyed: "+str(shipsDestroyed), 1, (255,255,255)) 
+        window.blit(text_ships_destroyed, (10,20))
+        text_ships_lost = text_ikon.render("Missed: "+str(shipsLost), 1, (255,255,255)) 
+        window.blit(text_ships_lost, (10,50))
+        
+        text_livesCount = text_ikon.render("Live left: "+str(livesCount), 1, (255,255,255)) 
+        window.blit(text_livesCount, (10,80))
+        
+        
+        
+        #Naboje
+        text_ammo_left = text_ikon.render("Ammo: "+str(ammoLeft), 1, (255,255,255)) 
+        window.blit(text_ammo_left, (win_width-120,win_heigth-30))
+
+    else:
+        if(playerWon):
+            window.blit(text_player_won, (200,200))
+            window.blit(text_player_again, (205,280))
+        if playerWon == False:
+            window.blit(text_player_lost, (200,200))
+            window.blit(text_player_again, (205,280))
+        
+    display.update()
+    clock.tick(FPS)
+    
